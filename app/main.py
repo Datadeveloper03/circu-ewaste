@@ -54,8 +54,17 @@ async def ingest_image(file: UploadFile = File(...)):
         if not contents:
             raise HTTPException(status_code=400, detail="Uploaded image file is empty.")
         
-        # 1. Run RapidOCR
-        raw_text, confidence = extract_text_from_image_bytes(contents)
+        # 1. Run RapidOCR in protected block (fallback to Multimodal Vision if unlabelled or memory constrained)
+        raw_text = ""
+        confidence = 0.88
+        try:
+            raw_text, conf = extract_text_from_image_bytes(contents)
+            if raw_text.strip():
+                confidence = conf
+        except Exception as ocr_err:
+            print(f"RapidOCR notice (continuing with vision AI): {ocr_err}")
+            raw_text = ""
+            confidence = 0.88
         
         # 2. Run Multimodal Vision AI (supports unlabelled, worn-out, or text-less gadgets)
         mime_type = file.content_type or "image/jpeg"
@@ -63,7 +72,7 @@ async def ingest_image(file: UploadFile = File(...)):
             image_bytes=contents,
             ocr_text=raw_text,
             mime_type=mime_type,
-            confidence=confidence if raw_text.strip() else 0.88
+            confidence=confidence
         )
         return candidate
     except Exception as e:

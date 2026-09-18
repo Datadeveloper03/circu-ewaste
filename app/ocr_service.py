@@ -27,20 +27,25 @@ def clean_ocr_text(text: str) -> str:
 
 def preprocess_gadget_image(image_bgr: np.ndarray) -> np.ndarray:
     """
-    Applies resolution scaling and white-border padding to improve OCR
-    detection on small serial labels, stickers, backplates, and invoices.
+    Normalizes resolution to 1024px max dimension to prevent out-of-memory
+    spikes on cloud instances while preserving fine OCR text on labels and backplates.
     """
     h, w = image_bgr.shape[:2]
-    # Ensure minimum height of 64px for the DBNet text detector
-    scale = max(2.0, 64.0 / max(h, 1))
-    if scale > 1.0:
+    max_dim = max(h, w)
+    
+    if max_dim > 1024:
+        scale = 1024.0 / max_dim
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+        resized = cv2.resize(image_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    elif max_dim < 200 and max_dim > 0:
+        scale = min(2.0, 200.0 / max_dim)
         new_w, new_h = int(w * scale), int(h * scale)
         resized = cv2.resize(image_bgr, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
     else:
         resized = image_bgr
 
     # Add border padding so text isn't flush against the image edge
-    padded = cv2.copyMakeBorder(resized, 25, 25, 25, 25, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+    padded = cv2.copyMakeBorder(resized, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=[255, 255, 255])
     return padded
 
 def extract_text_from_image_bytes(image_bytes: bytes) -> Tuple[str, float]:

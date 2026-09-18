@@ -15,6 +15,8 @@ from app.search_service import gather_circular_market_intelligence
 
 load_dotenv()
 
+import cv2
+import numpy as np
 import base64
 
 MODELS_PRIORITY = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
@@ -90,6 +92,22 @@ def extract_device_from_text(raw_text: str, confidence: float = 1.0) -> DeviceCa
 
 def identify_device_from_image(image_bytes: bytes, ocr_text: str = "", mime_type: str = "image/jpeg", confidence: float = 0.9) -> DeviceCandidate:
     """Uses multimodal vision AI combined with RapidOCR text to identify both labelled and unlabelled gadgets."""
+    # Ensure image size is compact for fast Gemini API inference and low memory
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is not None:
+            h, w = img.shape[:2]
+            max_d = max(h, w)
+            if max_d > 1024:
+                scale = 1024.0 / max_d
+                img = cv2.resize(img, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+            _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            image_bytes = buf.tobytes()
+            mime_type = "image/jpeg"
+    except Exception as prep_e:
+        print(f"Image normalization notice: {prep_e}")
+
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
     
     def _run(model_name: str):
