@@ -131,6 +131,36 @@ def get_nearby_centers(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Nearby centers lookup failed: {str(e)}")
 
+# --- Unified Frontend Delivery for Render & Cloud Deployment ---
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+frontend_out = Path(__file__).resolve().parent.parent / "frontend" / "out"
+
+if frontend_out.exists():
+    _next_dir = frontend_out / "_next"
+    if _next_dir.exists():
+        app.mount("/_next", StaticFiles(directory=str(_next_dir)), name="next_static")
+
+    @app.get("/")
+    async def serve_root():
+        index_file = frontend_out / "index.html"
+        if index_file.is_file():
+            return FileResponse(str(index_file))
+        return {"status": "ok", "service": "CircuScan API", "version": "2.1.0"}
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path in ("health", "docs", "openapi.json"):
+            raise HTTPException(status_code=404, detail="Route not found")
+        file_path = frontend_out / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+        index_file = frontend_out / "index.html"
+        if index_file.is_file():
+            return FileResponse(str(index_file))
+        raise HTTPException(status_code=404, detail="Page not found")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
