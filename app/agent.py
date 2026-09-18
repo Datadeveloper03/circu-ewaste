@@ -17,9 +17,9 @@ load_dotenv()
 
 import base64
 
-MODELS_PRIORITY = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.6-flash"]
+MODELS_PRIORITY = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
 
-def get_llm(model_name: str = "gemini-3.5-flash"):
+def get_llm(model_name: str = "gemini-3.6-flash"):
     api_key = os.getenv("GEMINI_API_KEY")
     return ChatGoogleGenerativeAI(
         model=model_name,

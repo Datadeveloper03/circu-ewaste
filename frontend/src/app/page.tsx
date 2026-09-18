@@ -45,11 +45,15 @@ const NearbyMapVisualizer = dynamic(
   }
 );
 
+const RENDER_PROD_API = "https://circu-ewaste-8f4q.onrender.com";
+
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  (typeof window !== "undefined" && window.location.port !== "3000"
-    ? ""
-    : "http://127.0.0.1:8000");
+  process.env.NEXT_PUBLIC_API_BASE ||
+  (typeof window !== "undefined"
+    ? window.location.hostname.includes("onrender.com")
+      ? ""
+      : RENDER_PROD_API
+    : RENDER_PROD_API);
 
 interface DeviceCandidate {
   brand: string;
@@ -179,6 +183,20 @@ export default function CircuScanApp() {
     try {
       let candidate: DeviceCandidate;
 
+      const parseErr = async (response: Response, defaultMsg: string) => {
+        try {
+          const text = await response.text();
+          try {
+            const json = JSON.parse(text);
+            return json.detail || json.message || text;
+          } catch {
+            return text || defaultMsg;
+          }
+        } catch {
+          return defaultMsg;
+        }
+      };
+
       if (activeTab === "image") {
         if (!selectedFile) {
           setErrorMsg("Please select an image of your gadget or label first.");
@@ -192,7 +210,7 @@ export default function CircuScanApp() {
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await parseErr(res, "Image extraction failed on server"));
         candidate = await res.json();
       } else if (activeTab === "pdf") {
         if (!selectedFile) {
@@ -207,7 +225,7 @@ export default function CircuScanApp() {
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await parseErr(res, "PDF extraction failed on server"));
         candidate = await res.json();
       } else {
         if (!textInput.trim()) {
@@ -221,7 +239,7 @@ export default function CircuScanApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: textInput }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) throw new Error(await parseErr(res, "Text analysis failed on server"));
         candidate = await res.json();
       }
 
@@ -234,7 +252,7 @@ export default function CircuScanApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(candidate),
       });
-      if (!qRes.ok) throw new Error(await qRes.text());
+      if (!qRes.ok) throw new Error(await parseErr(qRes, "Failed to generate diagnostic questions"));
       const qData = await qRes.json();
 
       setQuestions(qData.questions);
@@ -246,7 +264,8 @@ export default function CircuScanApp() {
 
       setStep(2);
     } catch (err: any) {
-      setErrorMsg(`Extraction error: ${err.message || "Could not process input"}`);
+      const msg = err?.message || String(err) || "Could not process input";
+      setErrorMsg(`Extraction error: ${msg}`);
     } finally {
       setLoading(false);
     }

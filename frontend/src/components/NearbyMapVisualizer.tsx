@@ -336,10 +336,12 @@ export default function NearbyMapVisualizer({
 
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_BASE ??
-        (typeof window !== "undefined" && window.location.port !== "3000"
-          ? ""
-          : "http://127.0.0.1:8000");
+        process.env.NEXT_PUBLIC_API_BASE ||
+        (typeof window !== "undefined"
+          ? window.location.hostname.includes("onrender.com")
+            ? ""
+            : "https://circu-ewaste-8f4q.onrender.com"
+          : "https://circu-ewaste-8f4q.onrender.com");
       const res = await fetch(
         `${apiBase}/api/nearby-centers?pincode=${encodeURIComponent(cleanPin)}&brand=${encodeURIComponent(deviceBrand)}&category=${encodeURIComponent(deviceCategory)}`
       );
