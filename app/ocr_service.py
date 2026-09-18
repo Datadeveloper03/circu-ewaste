@@ -6,12 +6,18 @@ import numpy as np
 import pymupdf
 from rapidocr_onnxruntime import RapidOCR
 
-# Initialize RapidOCR engine with parameters optimized for small labels, stickers, and backplates
-ocr_engine = RapidOCR(
-    det_db_thresh=0.15,
-    det_db_box_thresh=0.15,
-    det_db_unclip_ratio=2.2
-)
+# Initialize RapidOCR engine lazily with resilient fallback
+ocr_engine = None
+
+def get_ocr_engine():
+    global ocr_engine
+    if ocr_engine is None:
+        try:
+            ocr_engine = RapidOCR()
+        except Exception as e:
+            print(f"RapidOCR initialization notice: {e}")
+            ocr_engine = False
+    return ocr_engine if ocr_engine is not False else None
 
 def clean_ocr_text(text: str) -> str:
     """Removes non-standard noise while preserving model numbers, serials, and specifications."""
@@ -52,9 +58,13 @@ def extract_text_from_image_bytes(image_bytes: bytes) -> Tuple[str, float]:
 
     h, w = img.shape[:2]
 
+    engine = get_ocr_engine()
+    if engine is None:
+        return "", 0.0
+
     # Preprocess image (scaling + padding)
     processed = preprocess_gadget_image(img)
-    result, _ = ocr_engine(processed)
+    result, _ = engine(processed)
 
     # Pass 1: Standard detection pipeline found text
     if result:
@@ -76,7 +86,7 @@ def extract_text_from_image_bytes(image_bytes: bytes) -> Tuple[str, float]:
 
     # Pass 2: Fallback for tightly cropped serial/model stickers
     rec_target = cv2.resize(img, (max(180, int(w * 3)), 64), interpolation=cv2.INTER_CUBIC)
-    rec_result, _ = ocr_engine(rec_target, use_det=False, use_cls=False)
+    rec_result, _ = engine(rec_target, use_det=False, use_cls=False)
 
     if rec_result and isinstance(rec_result, list) and len(rec_result) > 0:
         rec_text = str(rec_result[0][0]).strip()
